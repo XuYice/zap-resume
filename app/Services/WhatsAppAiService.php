@@ -1,17 +1,22 @@
-<?php
+<?php // PHP 文件声明
 
-namespace App\Services;
 
-use App\Models\WhatsappMessage;
-use App\Models\AiTask;
-use App\Models\User;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
+namespace App\Services; // 命名空间，定义该服务类属于 App\Services
 
+
+use App\Models\WhatsappMessage; // 引入 WhatsApp 消息模型
+use App\Models\AiTask; // 引入 AI 任务模型
+use App\Models\User; // 引入用户模型
+use Illuminate\Support\Facades\Http; // 引入 HTTP 工具
+use Illuminate\Support\Facades\Log; // 引入日志工具
+
+// WhatsApp AI 服务类
 class WhatsAppAiService
 {
+    // 处理 WhatsApp 消息，自动提取待办任务
     public function processMessage(WhatsappMessage $message, $user)
     {
+        // 构建系统提示词，指导 AI 如何理解和处理消息内容
         $systemPrompt = <<<EOT
             你是一个极其高效、逻辑严密的“高管私人助理”和“任务提取引擎”。
             你的唯一职责是：从用户发来的原始消息（raw_content）中，精准提取出需要执行的“待办事项（To-Do）”。
@@ -45,15 +50,21 @@ class WhatsAppAiService
             ]
         EOT;
 
-        try{
-            $url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-            $apiKey = env('AI_API_KEY');
-            $model = env('AI_MODEL', 'gemini-3-flash-preview');
 
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $apiKey,
-                'Content-type' => 'application/json',
-           ])->post($url, [
+        try{
+            // 获取 API 密钥（从环境变量）
+            $apiKey = env('AI_API_KEY');
+
+            // 获取模型名称（可配置，默认为 gemini-1.5-flash）
+            $model = strtolower(env('AI_MODEL', 'Gemini-2.5-Flash-Native-Audio-Dialog'));
+            // 设置 AI API 的请求地址
+            $url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+
+            // 发送 POST 请求到 AI 接口，传递系统提示词和用户消息
+            $response = Http::withToken($apiKey)
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                ])->post($url, [
                 'model' => $model,
                 'messages' => [
                     ['role' => 'system', 'content' => $systemPrompt],
@@ -62,35 +73,43 @@ class WhatsAppAiService
                 'temperature' => 0.1,
             ]);
 
+            // 如果请求失败，抛出异常
             if($response->failed()) {
-                throw new \Exception("AI API request failed with status: " . $response->status());
+                throw new \Exception("AI API request failed with status: " . $response->status() . $response->body());
             }
 
+            // 获取 AI 返回的内容（任务 JSON）
             $aiContent = $response->json('choices.0.message.content');
 
+            // 去除可能包含的 markdown 标记
             $aiContent = preg_replace('/```json|```/', '', $aiContent);
 
+            // 解析 AI 返回的 JSON 字符串为数组
             $tasks = json_decode(trim($aiContent), true);
 
+            // 如果解析失败，抛出异常并记录原始内容
             if(json_last_error() !== JSON_ERROR_NONE) {
                 throw new \Exception("Failed to parse AI response as JSON: " . json_last_error_msg() . ". Raw response: " . $aiContent);
             }
 
+            // 如果有任务且为数组，则逐条保存到数据库
             if(!empty($tasks) && is_array($tasks)) {
                 foreach($tasks as $taskData) {
                     AiTask::create([
-                        'user_id' => $user->id,
-                        'whatsapp_message_id' => $message->id,
-                        'description' => $taskData['task'] ?? '',
-                        'priority_level' => $taskData['priority'] ?? 'normal',
-                        'status' => 'pending',
+                        'user_id' => $user->id, // 关联用户 ID
+                        'whatsapp_message_id' => $message->id, // 关联消息 ID
+                        'description' => $taskData['task'] ?? '', // 任务描述
+                        'priority_level' => $taskData['priority'] ?? 'normal', // 优先级
+                        'status' => 'pending', // 初始状态为待处理
                     ]);
                 }
             }
 
+            // 更新消息为已处理状态
             $message->update(['is_processed' => true]);
 
         } catch (\Exception $e){
+            // 捕获异常并记录错误日志，包含消息和用户信息
             Log::error('WhatsApp AI processing error:  ' . $e->getMessage(), [
                 'message_id' => $message->id,
                 'user_id' => $user->id
