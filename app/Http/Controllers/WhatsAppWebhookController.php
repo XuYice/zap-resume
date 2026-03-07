@@ -9,6 +9,7 @@ use App\Services\WhatsAppAiService;
 use App\Models\WhatsappMessage;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
+use App\Jobs\ProcessWhatsAppAiTask;
 
 
 class WhatsAppWebhookController extends Controller
@@ -39,8 +40,7 @@ class WhatsAppWebhookController extends Controller
                 'received_at'  => now(), // 记录接收时间
             ]);
 
-            // 调用 AI 服务处理消息内容，自动提取待办任务
-            $aiService->processMessage($message, $user);
+            ProcessWhatsAppAiTask::dispatch($message, $user);
 
             // 返回处理成功的响应
             return response()->json(['status' => 'success'], 200);
