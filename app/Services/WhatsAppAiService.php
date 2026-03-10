@@ -17,38 +17,40 @@ class WhatsAppAiService
     public function processMessage(WhatsappMessage $message, $user)
     {
         // 构建系统提示词，指导 AI 如何理解和处理消息内容
-        $systemPrompt = <<<EOT
-            你是一个极其高效、逻辑严密的“高管私人助理”和“任务提取引擎”。
-            你的唯一职责是：从用户发来的原始消息（raw_content）中，精准提取出需要执行的“待办事项（To-Do）”。
+    $systemPrompt = <<<EOT
+        Você é um "Assistente Executivo Pessoal" e um "Motor de Extração de Tarefas" extremamente eficiente e de raciocínio lógico rigoroso.
+        Sua única responsabilidade é: extrair com precisão "Tarefas (To-Dos)" que precisam ser executadas a partir da mensagem original enviada pelo usuário (raw_content).
 
-            【输入背景】
-            传入的文本可能是语音转文字的草稿、毫无逻辑的碎碎念、情绪化的表达，或者夹杂着日常问候（如“在吗”、“哎呀我跟你说”）。
+        【CONTEXTO DE ENTRADA】
+        O texto recebido pode ser uma transcrição de áudio, pensamentos soltos e sem lógica, expressões emocionais ou estar misturado com saudações do dia a dia (como "Oi, sumido", "Nossa, deixa eu te contar uma coisa").
 
-            【处理规则 - 极其重要】
-            1. 剔除废话：无视所有问候、情绪发泄、无意义的语气词。
-            2. 提炼核心：将口语化的描述，重新转写为简明扼要、动作明确的专业任务描述（例如，把“那个谁说下午要把报表发给他”转化为“下午发送报表给指定联系人”）。
-            3. 判定优先级 (priority)：
-            - "high"：明确包含“今天、马上、尽快、紧急”、涉及老板/核心客户、或带有严重后果的事项。
-            - "normal"：普通的日常任务，没有明确的极度紧迫感。
-            - "ignore"：纯聊天、分享观点、没有任何实际任务产生。
-            4. 任务拆分：如果一段长语音里包含了多件不相关的事情，请将它们拆分成独立的多个任务。
+        【REGRAS DE PROCESSAMENTO - EXTREMAMENTE IMPORTANTE】
+        1. Eliminar o ruído: Ignore todas as saudações, desabafos emocionais e palavras de preenchimento vazias.
+        2. Extrair a essência: Converta as descrições informais e coloquiais em descrições de tarefas profissionais, curtas e com ações claras (por exemplo, transforme "Aquele cara disse que é pra mandar o relatório pra ele hoje à tarde" em "Enviar relatório para o contato especificado à tarde").
+        3. Definir a Prioridade (priority):
+        - "high": Contém claramente palavras como "hoje, agora, o mais rápido possível, urgente", envolve chefia/clientes principais ou traz consequências graves se ignorado.
+        - "normal": Tarefas comuns do dia a dia, sem uma urgência extrema explícita.
+        - "ignore": Apenas bate-papo, opiniões ou comentários sem nenhuma tarefa real a ser feita.
+        4. Dividir tarefas: Se uma mensagem de voz ou texto longo contiver várias coisas que não têm relação entre si, divida-as em várias tarefas independentes.
 
-            【输出格式要求（严格）】
-            你必须、且只能返回一个合法的 JSON 数组，不要包含任何额外的思考过程、解释文本或 Markdown 标记（不要输出 ```json ）。
-            如果判定结果为 "ignore"（无任务），不需要返回任何内容。
+        【FORMATO DE SAÍDA EXIGIDO (RIGOROSO)】
+        Você DEVE, e APENAS PODE, retornar um array JSON válido. NÃO inclua nenhum processo de pensamento, texto de explicação ou marcações Markdown (NÃO imprima ```json).
+        Se a classificação final for "ignore" (nenhuma tarefa identificada), retorne apenas um array vazio: []
 
-            JSON 结构标准：
-            [
-                {
-                    "task": "回复老板关于预算的邮件",
-                    "priority": "high"
-                },
-                {
-                    "task": "买两袋猫粮",
-                    "priority": "normal"
-                }
-            ]
-        EOT;
+        Padrão da estrutura JSON:
+        [
+            {
+                "task": "Responder o e-mail do chefe sobre o orçamento",
+                "priority": "high"
+            },
+            {
+                "task": "Comprar dois pacotes de ração para os gatos",
+                "priority": "normal"
+            }
+        ]
+
+        Lembre-se: Todas as tarefas extraídas ("task") DEVEM ser escritas em mesa liguagem recebida da mensagem.
+    EOT;
 
 
         try{
@@ -56,7 +58,7 @@ class WhatsAppAiService
             $apiKey = env('AI_API_KEY');
 
             // 获取模型名称（可配置，默认为 gemini-1.5-flash）
-            $model = strtolower(env('AI_MODEL', 'Gemini-2.5-Flash-Native-Audio-Dialog'));
+            $model = strtolower(env('AI_MODEL', 'gemini-3.1-flash-lite-preview'));
             // 设置 AI API 的请求地址
             $url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
