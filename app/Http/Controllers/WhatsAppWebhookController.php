@@ -32,10 +32,10 @@ class WhatsAppWebhookController extends Controller
             $key = data_get($data, 'key') ?? data_get($data, 'message.key');
 
             // 3. 黄金过滤：忽略自己/机器人发送的消息
-            $fromMe = data_get($key, 'fromMe', false);
-            if ($fromMe === true) {
-                return response()->json(['status' => 'ignored_from_me', 'motivo' => '消息由机器人发送'], 200);
-            }
+            // $fromMe = data_get($key, 'fromMe', false);
+            // if ($fromMe === true) {
+            //     return response()->json(['status' => 'ignored_from_me', 'motivo' => '消息由机器人发送'], 200);
+            // }
 
             $messageData = data_get($data, 'message') ?? $data;
             $senderPhone = data_get($key, 'remoteJid', 'unknown');
@@ -43,7 +43,7 @@ class WhatsAppWebhookController extends Controller
 
             // 4. 查找或创建用户（根据手机号）
             $user = User::firstOrCreate(
-                ['telefone' => $senderPhone], // 用手机号查找
+                ['phone' => $senderPhone], // 用手机号查找
                 [
                     'name' => $senderName,    // 存入真实姓名
                     'email' => $senderPhone . '@whatsapp.com', // 虚拟邮箱（如数据库要求）
